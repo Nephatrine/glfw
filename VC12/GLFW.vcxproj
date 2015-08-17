@@ -68,22 +68,22 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)VC12\Lib\</OutDir>
-    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)</IntDir>
+    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)\</IntDir>
     <TargetName>glfw3d-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>glfw3d-$(PlatformTarget)</TargetName>
-    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)</IntDir>
+    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)VC12\Lib\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)VC12\Lib\</OutDir>
-    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)</IntDir>
+    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)\</IntDir>
     <TargetName>glfw3-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>glfw3-$(PlatformTarget)</TargetName>
-    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)</IntDir>
+    <IntDir>$(SolutionDir)VC12\Tmp\$(ProjectName)\$(PlatformTarget)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)VC12\Lib\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
