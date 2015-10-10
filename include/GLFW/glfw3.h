@@ -1067,12 +1067,6 @@ typedef struct GLFWimage
  *  bundle, if present.  This can be disabled with a
  *  [compile-time option](@ref compile_options_osx).
  *
- *  @remarks __X11:__ If the `LC_CTYPE` category of the current locale is set to
- *  `"C"` then the environment's locale will be applied to that category.  This
- *  is done because character input will not function when `LC_CTYPE` is set to
- *  `"C"`.  If another locale was set before this function was called, it will
- *  be left untouched.
- *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
  *
@@ -1212,12 +1206,13 @@ GLFWAPI GLFWerrorfun glfwSetErrorCallback(GLFWerrorfun cbfun);
 /*! @brief Returns the currently connected monitors.
  *
  *  This function returns an array of handles for all currently connected
- *  monitors.
+ *  monitors.  The primary monitor is always first in the returned array.  If no
+ *  monitors were found, this function returns `NULL`.
  *
  *  @param[out] count Where to store the number of monitors in the returned
  *  array.  This is set to zero if an error occurred.
- *  @return An array of monitor handles, or `NULL` if an
- *  [error](@ref error_handling) occurred.
+ *  @return An array of monitor handles, or `NULL` if no monitors were found or
+ *  if an [error](@ref error_handling) occurred.
  *
  *  @par Pointer Lifetime
  *  The returned array is allocated and freed by GLFW.  You should not free it
@@ -1240,13 +1235,16 @@ GLFWAPI GLFWmonitor** glfwGetMonitors(int* count);
 /*! @brief Returns the primary monitor.
  *
  *  This function returns the primary monitor.  This is usually the monitor
- *  where elements like the Windows task bar or the OS X menu bar are located.
+ *  where elements like the task bar or global menu bar are located.
  *
- *  @return The primary monitor, or `NULL` if an [error](@ref error_handling)
- *  occurred.
+ *  @return The primary monitor, or `NULL` if no monitors were found or if an
+ *  [error](@ref error_handling) occurred.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
+ *
+ *  @remarks The primary monitor is always first in the array returned by @ref
+ *  glfwGetMonitors.
  *
  *  @sa @ref monitor_monitors
  *  @sa glfwGetMonitors
@@ -1630,6 +1628,11 @@ GLFWAPI void glfwWindowHint(int target, int hint);
  *
  *  @remarks __X11:__ Some window managers will not respect the placement of
  *  initially hidden windows.
+ *
+ *  @remarks __X11:__ Due to the asynchronous nature of X11, it may take
+ *  a moment for a window to reach its requested state.  This means you may not
+ *  be able to query the final size, position or other attributes directly after
+ *  window creation.
  *
  *  @par Reentrancy
  *  This function may not be called from a callback.
@@ -2574,9 +2577,9 @@ GLFWAPI void glfwGetCursorPos(GLFWwindow* window, double* xpos, double* ypos);
  *  @param[in] ypos The desired y-coordinate, relative to the top edge of the
  *  client area.
  *
- *  @remarks __X11:__ Due to the asynchronous nature of a modern X desktop, it
- *  may take a moment for the window focus event to arrive.  This means you will
- *  not be able to set the cursor position directly after window creation.
+ *  @remarks __X11:__ Due to the asynchronous nature of X11, it may take
+ *  a moment for the window focus event to arrive.  This means you may not be
+ *  able to set the cursor position directly after window creation.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
@@ -2596,9 +2599,9 @@ GLFWAPI void glfwSetCursorPos(GLFWwindow* window, double xpos, double ypos);
  *  glfwSetCursor.  The cursor can be destroyed with @ref glfwDestroyCursor.
  *  Any remaining cursors are destroyed by @ref glfwTerminate.
  *
- *  The pixels are 32-bit little-endian RGBA, i.e. eight bits per channel.  They
- *  are arranged canonically as packed sequential rows, starting from the
- *  top-left corner.
+ *  The pixels are 32-bit, little-endian, non-premultiplied RGBA, i.e. eight
+ *  bits per channel.  They are arranged canonically as packed sequential rows,
+ *  starting from the top-left corner.
  *
  *  The cursor hotspot is specified in pixels, relative to the upper-left corner
  *  of the cursor image.  Like all other coordinate systems in GLFW, the X-axis
@@ -3074,7 +3077,9 @@ GLFWAPI void glfwSetClipboardString(GLFWwindow* window, const char* string);
 /*! @brief Returns the contents of the clipboard as a string.
  *
  *  This function returns the contents of the system clipboard, if it contains
- *  or is convertible to a UTF-8 encoded string.
+ *  or is convertible to a UTF-8 encoded string.  If the clipboard is empty or
+ *  if its contents cannot be converted, `NULL` is returned and a @ref
+ *  GLFW_FORMAT_UNAVAILABLE error is generated.
  *
  *  @param[in] window The window that will request the clipboard contents.
  *  @return The contents of the clipboard as a UTF-8 encoded string, or `NULL`
@@ -3299,15 +3304,15 @@ GLFWAPI int glfwExtensionSupported(const char* extension);
  *  without a current context will cause a @ref GLFW_NO_CURRENT_CONTEXT error.
  *
  *  @param[in] procname The ASCII encoded name of the function.
- *  @return The address of the function, or `NULL` if the function is
- *  unavailable or an [error](@ref error_handling) occurred.
+ *  @return The address of the function, or `NULL` if an [error](@ref
+ *  error_handling) occurred.
  *
- *  @remarks The addresses of a given function is not guaranteed to be the same
+ *  @remarks The address of a given function is not guaranteed to be the same
  *  between contexts.
  *
  *  @remarks This function may return a non-`NULL` address despite the
  *  associated version or extension not being available.  Always check the
- *  context version or extension string presence first.
+ *  context version or extension string first.
  *
  *  @par Pointer Lifetime
  *  The returned function pointer is valid until the context is destroyed or the

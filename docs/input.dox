@@ -296,8 +296,9 @@ GLFWcursor* cursor = glfwCreateCursor(&image, 0, 0);
 If cursor creation fails, `NULL` will be returned, so it is necessary to check
 the return value.
 
-The image data is 32-bit RGBA, i.e. eight bits per channel.  The pixels are
-arranged canonically as sequential rows, starting from the top-left corner.
+The image data is 32-bit, little-endian, non-premultiplied RGBA, i.e. eight bits
+per channel.  The pixels are arranged canonically as sequential rows, starting
+from the top-left corner.
 
 
 @subsubsection cursor_standard Standard cursor creation
@@ -543,8 +544,13 @@ converted to one, you can retrieve it with @ref glfwGetClipboardString.  See the
 reference documentation for the lifetime of the returned string.
 
 @code
-const char* clipboard = glfwGetClipboardString(window);
+const char* text = glfwGetClipboardString(window);
+if (text)
+    insert_text(text);
 @endcode
+
+If the clipboard is empty or if its contents could not be converted, `NULL` is
+returned.
 
 The contents of the system clipboard can be set to a UTF-8 encoded string with
 @ref glfwSetClipboardString.

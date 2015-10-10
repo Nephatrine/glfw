@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <errno.h>
+#include <assert.h>
 
 // Action for EWMH client messages
 #define _NET_WM_STATE_REMOVE        0
@@ -46,32 +48,29 @@
 #define Button6            6
 #define Button7            7
 
-typedef struct
-{
-    unsigned long flags;
-    unsigned long functions;
-    unsigned long decorations;
-    long input_mode;
-    unsigned long status;
-} MotifWmHints;
-
-#define MWM_HINTS_DECORATIONS (1L << 1)
-
 
 // Wait for data to arrive
 //
 void selectDisplayConnection(struct timeval* timeout)
 {
     fd_set fds;
+    int result;
     const int fd = ConnectionNumber(_glfw.x11.display);
 
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
 
-    // select(1) is used instead of an X function like XNextEvent, as the
-    // wait inside those are guarded by the mutex protecting the display
-    // struct, locking out other threads from using X (including GLX)
-    select(fd + 1, &fds, NULL, NULL, timeout);
+    // NOTE: We use select instead of an X function like XNextEvent, as the
+    //       wait inside those are guarded by the mutex protecting the display
+    //       struct, locking out other threads from using X (including GLX)
+    // NOTE: Only retry on EINTR if there is no timeout, as select is not
+    //       required to update it for the time elapsed
+    // TODO: Update timeout value manually
+    do
+    {
+        result = select(fd + 1, &fds, NULL, NULL, timeout);
+    }
+    while (result == -1 && errno == EINTR && timeout == NULL);
 }
 
 // Returns whether the window is iconified
@@ -148,7 +147,7 @@ static int translateState(int state)
     return mods;
 }
 
-// Translates an X Window key to internal coding
+// Translates an X11 key code to a GLFW key token
 //
 static int translateKey(int scancode)
 {
@@ -297,20 +296,6 @@ static GLboolean createWindow(_GLFWwindow* window,
             return GL_FALSE;
         }
 
-        if (!wndconfig->decorated)
-        {
-            MotifWmHints hints;
-            hints.flags = MWM_HINTS_DECORATIONS;
-            hints.decorations = 0;
-
-            XChangeProperty(_glfw.x11.display, window->x11.handle,
-                            _glfw.x11.MOTIF_WM_HINTS,
-                            _glfw.x11.MOTIF_WM_HINTS, 32,
-                            PropModeReplace,
-                            (unsigned char*) &hints,
-                            sizeof(MotifWmHints) / sizeof(long));
-        }
-
         XSaveContext(_glfw.x11.display,
                      window->x11.handle,
                      _glfw.x11.context,
@@ -339,6 +324,28 @@ static GLboolean createWindow(_GLFWwindow* window,
     }
     else
     {
+        if (!wndconfig->decorated)
+        {
+            struct
+            {
+                unsigned long flags;
+                unsigned long functions;
+                unsigned long decorations;
+                long input_mode;
+                unsigned long status;
+            } hints;
+
+            hints.flags = 2;       // Set decorations
+            hints.decorations = 0; // No decorations
+
+            XChangeProperty(_glfw.x11.display, window->x11.handle,
+                            _glfw.x11.MOTIF_WM_HINTS,
+                            _glfw.x11.MOTIF_WM_HINTS, 32,
+                            PropModeReplace,
+                            (unsigned char*) &hints,
+                            sizeof(hints) / sizeof(long));
+        }
+
         if (wndconfig->floating)
         {
             if (_glfw.x11.NET_WM_STATE && _glfw.x11.NET_WM_STATE_ABOVE)
@@ -839,6 +846,31 @@ static void leaveFullscreenMode(_GLFWwindow* window)
     }
 }
 
+// Decode a Unicode code point from a UTF-8 stream
+// Based on cutef8 by Jeff Bezanson (Public Domain)
+//
+#if defined(X_HAVE_UTF8_STRING)
+static unsigned int decodeUTF8(const char** s)
+{
+    unsigned int ch = 0, count = 0;
+    static const unsigned int offsets[] =
+    {
+        0x00000000u, 0x00003080u, 0x000e2080u,
+        0x03c82080u, 0xfa082080u, 0x82082080u
+    };
+
+    do
+    {
+        ch = (ch << 6) + (unsigned char) **s;
+        (*s)++;
+        count++;
+    } while ((**s & 0xc0) == 0x80);
+
+    assert(count <= 6);
+    return ch - offsets[count - 1];
+}
+#endif /*X_HAVE_UTF8_STRING*/
+
 // Process the specified X event
 //
 static void processEvent(XEvent *event)
@@ -889,17 +921,60 @@ static void processEvent(XEvent *event)
 
                 if (!filtered)
                 {
-                    int i;
+                    int count;
                     Status status;
+#if defined(X_HAVE_UTF8_STRING)
+                    char buffer[96];
+                    char* chars = buffer;
+
+                    count = Xutf8LookupString(window->x11.ic,
+                                              &event->xkey,
+                                              buffer, sizeof(buffer),
+                                              NULL, &status);
+
+                    if (status == XBufferOverflow)
+                    {
+                        chars = calloc(count, 1);
+                        count = Xutf8LookupString(window->x11.ic,
+                                                  &event->xkey,
+                                                  chars, count,
+                                                  NULL, &status);
+                    }
+
+                    if (status == XLookupChars || status == XLookupBoth)
+                    {
+                        const char* c = chars;
+                        while (c - chars < count)
+                            _glfwInputChar(window, decodeUTF8(&c), mods, plain);
+                    }
+#else
                     wchar_t buffer[16];
+                    wchar_t* chars = buffer;
 
-                    const int count = XwcLookupString(window->x11.ic,
-                                                      &event->xkey,
-                                                      buffer, sizeof(buffer),
-                                                      NULL, &status);
+                    count = XwcLookupString(window->x11.ic,
+                                            &event->xkey,
+                                            buffer, sizeof(buffer) / sizeof(wchar_t),
+                                            NULL, &status);
 
-                    for (i = 0;  i < count;  i++)
-                        _glfwInputChar(window, buffer[i], mods, plain);
+                    if (status == XBufferOverflow)
+                    {
+                        chars = calloc(count, sizeof(wchar_t));
+                        count = XwcLookupString(window->x11.ic,
+                                                &event->xkey,
+                                                chars, count,
+                                                NULL, &status);
+                    }
+
+                    if (status == XLookupChars || status == XLookupBoth)
+                    {
+                        int i;
+                        for (i = 0;  i < count;  i++)
+                            _glfwInputChar(window, chars[i], mods, plain);
+                    }
+#endif
+
+                    if (chars != buffer)
+                        free(chars);
                 }
             }
             else
@@ -1250,9 +1325,6 @@ static void processEvent(XEvent *event)
             if (window->cursorMode == GLFW_CURSOR_DISABLED)
                 disableCursor(window);
 
-            if (window->monitor && window->autoIconify)
-                enterFullscreenMode(window);
-
             _glfwInputWindowFocus(window, GL_TRUE);
             return;
         }
@@ -1274,10 +1346,7 @@ static void processEvent(XEvent *event)
                 restoreCursor(window);
 
             if (window->monitor && window->autoIconify)
-            {
                 _glfwPlatformIconifyWindow(window);
-                leaveFullscreenMode(window);
-            }
 
             _glfwInputWindowFocus(window, GL_FALSE);
             return;
@@ -1296,9 +1365,19 @@ static void processEvent(XEvent *event)
             {
                 const int state = getWindowState(window);
                 if (state == IconicState)
+                {
+                    if (window->monitor)
+                        leaveFullscreenMode(window);
+
                     _glfwInputWindowIconify(window, GL_TRUE);
+                }
                 else if (state == NormalState)
+                {
+                    if (window->monitor)
+                        enterFullscreenMode(window);
+
                     _glfwInputWindowIconify(window, GL_FALSE);
+                }
             }
 
             return;
@@ -1749,7 +1828,7 @@ void _glfwPlatformPollEvents(void)
 
 void _glfwPlatformWaitEvents(void)
 {
-    if (!XPending(_glfw.x11.display))
+    while (!XPending(_glfw.x11.display))
         selectDisplayConnection(NULL);
 
     _glfwPlatformPollEvents();

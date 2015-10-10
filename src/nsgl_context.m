@@ -67,8 +67,8 @@ int _glfwCreateContext(_GLFWwindow* window,
 
     if (ctxconfig->api == GLFW_OPENGL_ES_API)
     {
-        _glfwInputError(GLFW_VERSION_UNAVAILABLE,
-                        "NSGL: This API does not support OpenGL ES");
+        _glfwInputError(GLFW_API_UNAVAILABLE,
+                        "NSGL: OpenGL ES is not available on OS X");
         return GL_FALSE;
     }
 
@@ -211,8 +211,8 @@ int _glfwCreateContext(_GLFWwindow* window,
         [[NSOpenGLPixelFormat alloc] initWithAttributes:attributes];
     if (window->nsgl.pixelFormat == nil)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "NSGL: Failed to create OpenGL pixel format");
+        _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
+                        "NSGL: Failed to find a suitable pixel format");
         return GL_FALSE;
     }
 
