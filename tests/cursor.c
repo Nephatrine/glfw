@@ -30,6 +30,7 @@
 //
 //========================================================================
 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #if defined(_MSC_VER)
@@ -46,9 +47,9 @@
 static double cursor_x;
 static double cursor_y;
 static int swap_interval = 1;
-static GLboolean wait_events = GL_FALSE;
-static GLboolean animate_cursor = GL_FALSE;
-static GLboolean track_cursor = GL_FALSE;
+static int wait_events = GLFW_FALSE;
+static int animate_cursor = GLFW_FALSE;
+static int track_cursor = GLFW_FALSE;
 static GLFWcursor* standard_cursors[6];
 
 static void error_callback(int error, const char* description)
@@ -122,7 +123,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         {
             if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED)
             {
-                glfwSetWindowShouldClose(window, GL_TRUE);
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
                 break;
             }
 
@@ -237,6 +238,7 @@ int main(void)
     }
 
     glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     glfwGetCursorPos(window, &cursor_x, &cursor_y);
     printf("Cursor position: %f %f\n", cursor_x, cursor_y);

@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 X11 - www.glfw.org
+// GLFW 3.2 X11 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -234,6 +234,7 @@ static void createKeyTables(void)
     int scancode, key;
 
     memset(_glfw.x11.publicKeys, -1, sizeof(_glfw.x11.publicKeys));
+    memset(_glfw.x11.nativeKeys, -1, sizeof(_glfw.x11.nativeKeys));
 
     if (_glfw.x11.xkb.available)
     {
@@ -312,31 +313,35 @@ static void createKeyTables(void)
         XkbFreeClientMap(desc, 0, True);
     }
 
-    // Translate the un-translated key codes using traditional X11 KeySym
-    // lookups
     for (scancode = 0;  scancode < 256;  scancode++)
     {
+        // Translate the un-translated key codes using traditional X11 KeySym
+        // lookups
         if (_glfw.x11.publicKeys[scancode] < 0)
             _glfw.x11.publicKeys[scancode] = translateKeyCode(scancode);
+
+        // Store the reverse translation for faster key name lookup
+        if (_glfw.x11.publicKeys[scancode] > 0)
+            _glfw.x11.nativeKeys[_glfw.x11.publicKeys[scancode]] = scancode;
     }
 }
 
 // Check whether the IM has a usable style
 //
-static GLboolean hasUsableInputMethodStyle(void)
+static GLFWbool hasUsableInputMethodStyle(void)
 {
     unsigned int i;
-    GLboolean found = GL_FALSE;
+    GLFWbool found = GLFW_FALSE;
     XIMStyles* styles = NULL;
 
     if (XGetIMValues(_glfw.x11.im, XNQueryInputStyle, &styles, NULL) != NULL)
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     for (i = 0;  i < styles->count_styles;  i++)
     {
         if (styles->supported_styles[i] == (XIMPreeditNothing | XIMStatusNothing))
         {
-            found = GL_TRUE;
+            found = GLFW_TRUE;
             break;
         }
     }
@@ -463,7 +468,7 @@ static void detectEWMH(void)
 
 // Initialize X11 display and look for supported X11 extensions
 //
-static GLboolean initExtensions(void)
+static GLFWbool initExtensions(void)
 {
     // Find or create window manager atoms
     _glfw.x11.WM_PROTOCOLS = XInternAtom(_glfw.x11.display,
@@ -486,29 +491,29 @@ static GLboolean initExtensions(void)
 #endif /*_GLFW_HAS_XF86VM*/
 
     // Check for RandR extension
-    _glfw.x11.randr.available =
-        XRRQueryExtension(_glfw.x11.display,
+    if (XRRQueryExtension(_glfw.x11.display,
                           &_glfw.x11.randr.eventBase,
-                          &_glfw.x11.randr.errorBase);
-
-    if (_glfw.x11.randr.available)
+                          &_glfw.x11.randr.errorBase))
     {
-        XRRScreenResources* sr;
-
-        if (!XRRQueryVersion(_glfw.x11.display,
-                             &_glfw.x11.randr.major,
-                             &_glfw.x11.randr.minor))
+        if (XRRQueryVersion(_glfw.x11.display,
+                            &_glfw.x11.randr.major,
+                            &_glfw.x11.randr.minor))
+        {
+            // The GLFW RandR path requires at least version 1.3
+            if (_glfw.x11.randr.major > 1 || _glfw.x11.randr.minor >= 3)
+                _glfw.x11.randr.available = GLFW_TRUE;
+        }
+        else
         {
             _glfwInputError(GLFW_PLATFORM_ERROR,
                             "X11: Failed to query RandR version");
-            return GL_FALSE;
         }
+    }
 
-        // The GLFW RandR path requires at least version 1.3
-        if (_glfw.x11.randr.major == 1 && _glfw.x11.randr.minor < 3)
-            _glfw.x11.randr.available = GL_FALSE;
-
-        sr = XRRGetScreenResources(_glfw.x11.display, _glfw.x11.root);
+    if (_glfw.x11.randr.available)
+    {
+        XRRScreenResources* sr = XRRGetScreenResources(_glfw.x11.display,
+                                                       _glfw.x11.root);
 
         if (!sr->ncrtc || !XRRGetCrtcGammaSize(_glfw.x11.display, sr->crtcs[0]))
         {
@@ -518,10 +523,13 @@ static GLboolean initExtensions(void)
             // available
             _glfwInputError(GLFW_PLATFORM_ERROR,
                             "X11: RandR gamma ramp support seems broken");
-            _glfw.x11.randr.gammaBroken = GL_TRUE;
+            _glfw.x11.randr.gammaBroken = GLFW_TRUE;
         }
 
         XRRFreeScreenResources(sr);
+
+        XRRSelectInput(_glfw.x11.display, _glfw.x11.root,
+                       RROutputChangeNotifyMask);
     }
 
     if (XineramaQueryExtension(_glfw.x11.display,
@@ -529,7 +537,7 @@ static GLboolean initExtensions(void)
                                &_glfw.x11.xinerama.minor))
     {
         if (XineramaIsActive(_glfw.x11.display))
-            _glfw.x11.xinerama.available = GL_TRUE;
+            _glfw.x11.xinerama.available = GLFW_TRUE;
     }
 
 #if defined(_GLFW_HAS_XINPUT)
@@ -546,7 +554,7 @@ static GLboolean initExtensions(void)
                            &_glfw.x11.xi.major,
                            &_glfw.x11.xi.minor) != BadRequest)
         {
-            _glfw.x11.xi.available = GL_TRUE;
+            _glfw.x11.xi.available = GLFW_TRUE;
         }
     }
 #endif /*_GLFW_HAS_XINPUT*/
@@ -569,7 +577,7 @@ static GLboolean initExtensions(void)
         if (XkbSetDetectableAutoRepeat(_glfw.x11.display, True, &supported))
         {
             if (supported)
-                _glfw.x11.xkb.detectable = GL_TRUE;
+                _glfw.x11.xkb.detectable = GLFW_TRUE;
         }
     }
 
@@ -615,7 +623,7 @@ static GLboolean initExtensions(void)
     _glfw.x11.XdndFinished = XInternAtom(_glfw.x11.display, "XdndFinished", True);
     _glfw.x11.XdndSelection = XInternAtom(_glfw.x11.display, "XdndSelection", True);
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 // Create a blank cursor for hidden and disabled cursor modes
@@ -733,7 +741,7 @@ int _glfwPlatformInit(void)
                             "X11: The DISPLAY environment variable is missing");
         }
 
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
     _glfw.x11.screen = DefaultScreen(_glfw.x11.display);
@@ -741,7 +749,7 @@ int _glfwPlatformInit(void)
     _glfw.x11.context = XUniqueContext();
 
     if (!initExtensions())
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     _glfw.x11.cursor = createNULLCursor();
 
@@ -761,14 +769,14 @@ int _glfwPlatformInit(void)
     }
 
     if (!_glfwInitContextAPI())
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     if (!_glfwInitJoysticks())
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     _glfwInitTimer();
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 void _glfwPlatformTerminate(void)
@@ -787,8 +795,6 @@ void _glfwPlatformTerminate(void)
         _glfw.x11.im = NULL;
     }
 
-    _glfwTerminateJoysticks();
-
     if (_glfw.x11.display)
     {
         XCloseDisplay(_glfw.x11.display);
@@ -796,8 +802,9 @@ void _glfwPlatformTerminate(void)
     }
 
     // NOTE: This needs to be done after XCloseDisplay, as libGL registers
-    //       internal cleanup callbacks in libX11
+    //       cleanup callbacks that get called by it
     _glfwTerminateContextAPI();
+    _glfwTerminateJoysticks();
 }
 
 const char* _glfwPlatformGetVersionString(void)

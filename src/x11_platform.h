@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 X11 - www.glfw.org
+// GLFW 3.2 X11 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -62,10 +62,8 @@
 #include "xkb_unicode.h"
 
 #if defined(_GLFW_GLX)
- #define _GLFW_X11_CONTEXT_VISUAL window->glx.visual
  #include "glx_context.h"
 #elif defined(_GLFW_EGL)
- #define _GLFW_X11_CONTEXT_VISUAL window->egl.visual
  #define _GLFW_EGL_NATIVE_WINDOW  window->x11.handle
  #define _GLFW_EGL_NATIVE_DISPLAY _glfw.x11.display
  #include "egl_context.h"
@@ -123,8 +121,12 @@ typedef struct _GLFWlibraryX11
     int             errorCode;
     // Clipboard string (while the selection is owned)
     char*           clipboardString;
+    // Key name string
+    char            keyName[64];
     // X11 keycode to GLFW key LUT
     short int       publicKeys[256];
+    // GLFW key to X11 keycode LUT
+    short int       nativeKeys[GLFW_KEY_LAST + 1];
 
     // Window manager atoms
     Atom            WM_PROTOCOLS;
@@ -168,18 +170,18 @@ typedef struct _GLFWlibraryX11
     Atom            GLFW_SELECTION;
 
     struct {
-        GLboolean   available;
+        GLFWbool    available;
         int         eventBase;
         int         errorBase;
         int         major;
         int         minor;
-        GLboolean   gammaBroken;
-        GLboolean   monitorBroken;
+        GLFWbool    gammaBroken;
+        GLFWbool    monitorBroken;
     } randr;
 
     struct {
-        GLboolean   available;
-        GLboolean   detectable;
+        GLFWbool    available;
+        GLFWbool    detectable;
         int         majorOpcode;
         int         eventBase;
         int         errorBase;
@@ -200,14 +202,14 @@ typedef struct _GLFWlibraryX11
     } xdnd;
 
     struct {
-        GLboolean   available;
+        GLFWbool    available;
         int         major;
         int         minor;
     } xinerama;
 
 #if defined(_GLFW_HAS_XINPUT)
     struct {
-        GLboolean   available;
+        GLFWbool    available;
         int         majorOpcode;
         int         eventBase;
         int         errorBase;
@@ -218,7 +220,7 @@ typedef struct _GLFWlibraryX11
 
 #if defined(_GLFW_HAS_XF86VM)
     struct {
-        GLboolean   available;
+        GLFWbool    available;
         int         eventBase;
         int         errorBase;
     } vidmode;
@@ -251,7 +253,7 @@ typedef struct _GLFWcursorX11
 } _GLFWcursorX11;
 
 
-GLboolean _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
+GLFWbool _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
 void _glfwRestoreVideoMode(_GLFWmonitor* monitor);
 
 Cursor _glfwCreateCursor(const GLFWimage* image, int xhot, int yhot);

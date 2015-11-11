@@ -23,13 +23,8 @@
 //
 //========================================================================
 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
-/* HACK: Explicitly include the glext.h shipping with GLFW, as this program uses
- *       many modern symbols not provided by the versions in some development
- *       environments (for example on OS X).
- */
-#include <GL/glext.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +88,7 @@ static void usage(void)
     printf("      --stereo              request stereo rendering\n");
     printf("      --srgb                request an sRGB capable framebuffer\n");
     printf("      --singlebuffer        request single-buffering\n");
+    printf("      --no-error            request a context that does not emit errors\n");
 }
 
 static void error_callback(int error, const char* description)
@@ -190,7 +186,7 @@ static void list_extensions(int api, int major, int minor)
     putchar('\n');
 }
 
-static GLboolean valid_version(void)
+static int valid_version(void)
 {
     int major, minor, revision;
     glfwGetVersion(&major, &minor, &revision);
@@ -198,13 +194,13 @@ static GLboolean valid_version(void)
     if (major != GLFW_VERSION_MAJOR)
     {
         printf("*** ERROR: GLFW major version mismatch! ***\n");
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
     if (minor != GLFW_VERSION_MINOR || revision != GLFW_VERSION_REVISION)
         printf("*** WARNING: GLFW version mismatch! ***\n");
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 static void print_version(void)
@@ -224,14 +220,14 @@ int main(int argc, char** argv)
 {
     int ch, api, major, minor, revision, profile;
     GLint redbits, greenbits, bluebits, alphabits, depthbits, stencilbits;
-    GLboolean list = GL_FALSE;
+    int list = GLFW_FALSE;
     GLFWwindow* window;
 
     enum { API, BEHAVIOR, DEBUG, FORWARD, HELP, EXTENSIONS,
            MAJOR, MINOR, PROFILE, ROBUSTNESS, VERSION,
            REDBITS, GREENBITS, BLUEBITS, ALPHABITS, DEPTHBITS, STENCILBITS,
            ACCUMREDBITS, ACCUMGREENBITS, ACCUMBLUEBITS, ACCUMALPHABITS,
-           AUXBUFFERS, SAMPLES, STEREO, SRGB, SINGLEBUFFER };
+           AUXBUFFERS, SAMPLES, STEREO, SRGB, SINGLEBUFFER, NOERROR_SRSLY };
     const struct option options[] =
     {
         { "behavior",         1, NULL, BEHAVIOR },
@@ -260,6 +256,7 @@ int main(int argc, char** argv)
         { "stereo",           0, NULL, STEREO },
         { "srgb",             0, NULL, SRGB },
         { "singlebuffer",     0, NULL, SINGLEBUFFER },
+        { "no-error",         0, NULL, NOERROR_SRSLY },
         { NULL, 0, NULL, 0 }
     };
 
@@ -309,11 +306,11 @@ int main(int argc, char** argv)
                 break;
             case 'd':
             case DEBUG:
-                glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+                glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
                 break;
             case 'f':
             case FORWARD:
-                glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+                glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
                 break;
             case 'h':
             case HELP:
@@ -321,7 +318,7 @@ int main(int argc, char** argv)
                 exit(EXIT_SUCCESS);
             case 'l':
             case EXTENSIONS:
-                list = GL_TRUE;
+                list = GLFW_TRUE;
                 break;
             case 'm':
             case MAJOR:
@@ -444,13 +441,16 @@ int main(int argc, char** argv)
                     glfwWindowHint(GLFW_SAMPLES, atoi(optarg));
                 break;
             case STEREO:
-                glfwWindowHint(GLFW_STEREO, GL_TRUE);
+                glfwWindowHint(GLFW_STEREO, GLFW_TRUE);
                 break;
             case SRGB:
-                glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
+                glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
                 break;
             case SINGLEBUFFER:
-                glfwWindowHint(GLFW_DOUBLEBUFFER, GL_FALSE);
+                glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_FALSE);
+                break;
+            case NOERROR_SRSLY:
+                glfwWindowHint(GLFW_CONTEXT_NO_ERROR, GLFW_TRUE);
                 break;
             default:
                 usage();
@@ -460,7 +460,7 @@ int main(int argc, char** argv)
 
     print_version();
 
-    glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     window = glfwCreateWindow(200, 200, "Version", NULL, NULL);
     if (!window)
@@ -470,6 +470,7 @@ int main(int argc, char** argv)
     }
 
     glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     // Report client API version
 
@@ -500,10 +501,12 @@ int main(int argc, char** argv)
 
             if (flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)
                 printf(" forward-compatible");
-            if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
+            if (flags & 2/*GL_CONTEXT_FLAG_DEBUG_BIT*/)
                 printf(" debug");
             if (flags & GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT_ARB)
                 printf(" robustness");
+            if (flags & 8/*GL_CONTEXT_FLAG_NO_ERROR_BIT_KHR*/)
+                printf(" no-error");
             putchar('\n');
 
             printf("%s context flags parsed by GLFW:", get_api_name(api));
@@ -514,6 +517,8 @@ int main(int argc, char** argv)
                 printf(" debug");
             if (glfwGetWindowAttrib(window, GLFW_CONTEXT_ROBUSTNESS) == GLFW_LOSE_CONTEXT_ON_RESET)
                 printf(" robustness");
+            if (glfwGetWindowAttrib(window, GLFW_CONTEXT_NO_ERROR))
+                printf(" no-error");
             putchar('\n');
         }
 
